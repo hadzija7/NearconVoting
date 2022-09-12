@@ -10,12 +10,10 @@ use electron_rs::verifier::near::{
     get_prepared_verifying_key, parse_verification_key, verify_proof,
 };
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-// use near_sdk::collections::{LookupMap, LookupSet};
-use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{log, near_bindgen};
 
 use semaphore_custom::{
-    hash_to_field, identity::Identity, merkle_tree:: Branch, poseidon_tree::PoseidonTree, Field,
+    hash_to_field, identity::Identity, merkle_tree::Branch, poseidon_tree::PoseidonTree, Field,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -59,12 +57,12 @@ const VKEY_STR: &str = r#"
  ],
  "vk_delta_2": [
   [
-   "3821443919983577727088651801428802207724056406272428799071076005098787234763",
-   "8174750903966358777454739020857516908911833594606212897386558063951586529110"
+   "8879890989264990724929583572227694093020547395165234611490038863301440480124",
+   "9118915921200321700674476121032174636824825361092912880111756114618259932218"
   ],
   [
-   "18292198139401600943932694434056405837635210778597205508756160444400816932828",
-   "21193267598291928284543677384385002232279126708130549822530350448367284765441"
+   "4656010635710846748280498970499223214928145030500196139272611309304666324119",
+   "20659316531056419097669569166696372825924058522157165616319944674492475650003"
   ],
   [
    "1",
@@ -103,28 +101,28 @@ const VKEY_STR: &str = r#"
  ],
  "IC": [
   [
-   "18909076149018184150507373559728243658390925434549795413114925967127955290677",
-   "14103112161910936758168576360044522814990537316587849666682250230829746592099",
+   "7992849163359690277429275172137171952092326291810396064293381898445871519950",
+   "17546929511291163694211970903337129823288895193302653942313669095348015551545",
    "1"
   ],
   [
-   "7969327040973863889335756470214138105748057763189479952697331459344138800764",
-   "5785196400466483463132253298583166990390575866403759459623299335117125845465",
+   "20455173372438527448587104721675651359020650404150064947152976639148022496703",
+   "11202675299758796486930085599153684972945186546399818930452942776397882101575",
    "1"
   ],
   [
-   "21051097487881164874463033375052129047394843744573294847111308392028731377030",
-   "10855533610461666477249153082306690667863505352812708181028218370521655058492",
+   "16152531242406568656841758663925122383265787230676884611802939204195545521540",
+   "1911617130081794819725040297845710381910455918022984655713792331988504663797",
    "1"
   ],
   [
-   "4319780315499060392574138782191013129592543766464046592208884866569377437627",
-   "13920930439395002698339449999482247728129484070642079851312682993555105218086",
+   "14192820197289767492279902003053886295813080519670340955603008735291114325607",
+   "20808565309247786727521680832632637973834830526153037852919157047604245846002",
    "1"
   ],
   [
-   "3554830803181375418665292545416227334138838284686406179598687755626325482686",
-   "5951609174746846070367113593675211691311013364421437923470787371738135276998",
+   "16268374589088317723741174014208052657921533591444943021723351576506766999010",
+   "11272411066061777455868323777059996812926976899902173672950172003710349844986",
    "1"
   ]
  ]
@@ -135,12 +133,12 @@ const VKEY_STR: &str = r#"
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
-    #[borsh_skip]
     merkle_tree: MerkleTree,
     nullifiers: HashMap<String, HashSet<String>>, // external_nullifier: < nullifier_hash  >
     next_leaf: usize,
 }
 
+#[derive(PartialEq)]
 pub struct MerkleTree {
     tree: PoseidonTree,
 }
@@ -148,15 +146,56 @@ pub struct MerkleTree {
 impl Default for MerkleTree {
     fn default() -> Self {
         Self {
-            tree: PoseidonTree::new(21, Field::from(0))
+            tree: PoseidonTree::new(4, Field::from(0)),
         }
     }
 }
 
-#[derive(PartialEq, Debug, Serialize, Deserialize)]
+impl BorshDeserialize for MerkleTree {
+    fn deserialize(buf: &mut &[u8]) -> std::io::Result<Self> {
+        let depth = usize::deserialize(buf)?;
+
+        let empty = Vec::<String>::deserialize(buf)?.iter().map(|x| x.parse::<Field>().unwrap()).collect();
+
+        let nodes = Vec::<String>::deserialize(buf)?.iter().map(|x| x.parse::<Field>().unwrap()).collect();
+
+        let merkle_tree = MerkleTree{
+            tree: PoseidonTree {
+                depth: depth,
+                empty: empty,
+                nodes: nodes,
+            }
+        };
+
+        Ok(merkle_tree)
+    }
+}
+
+impl BorshSerialize for MerkleTree {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        
+        self.tree.depth.serialize(writer)?;
+        self.tree
+            .empty
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>()
+            .serialize(writer)?;
+        self.tree
+            .nodes
+            .iter()
+            .map(|x| x.to_string())
+            .collect::<Vec<String>>()
+            .serialize(writer)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, near_sdk::serde::Serialize, near_sdk::serde::Deserialize)]
 pub struct MerklePath {
-    treePathIndices: Vec<String>,
-    treeSiblings: Vec<String>,
+    tree_path_indices: Vec<String>,
+    tree_siblings: Vec<String>,
 }
 
 // Define the default, which automatically initializes the contract
@@ -181,7 +220,9 @@ impl Contract {
     }
 
     pub fn insert_leaf(&mut self, commitment: String) {
-        self.merkle_tree.tree.set(self.next_leaf, commitment.parse::<Field>().unwrap());
+        self.merkle_tree
+            .tree
+            .set(self.next_leaf, commitment.parse::<Field>().unwrap());
         self.next_leaf += 1;
     }
 
@@ -193,10 +234,14 @@ impl Contract {
         self.next_leaf
     }
 
-    pub fn add_poll(&mut self, poll_id: String) { // TODO: add Poll struct
+    pub fn add_poll(&mut self, poll_id: String) {
+        // TODO: add Poll struct
         // let poll_id = poll_id_str.parse::<Field>().unwrap();
 
-        assert!(!self.nullifiers.contains_key(&poll_id), "poll already exists");
+        assert!(
+            !self.nullifiers.contains_key(&poll_id),
+            "poll already exists"
+        );
 
         log!("Poll created: {}", &poll_id);
 
@@ -214,10 +259,17 @@ impl Contract {
             .filter_map(|w| w.parse::<Field>().ok()) // calling ok() turns Result to Option so that filter_map can discard None values
             .collect();
 
-        assert!(self.nullifiers.contains_key(&pub_inputs[3].to_string()), "poll doesn't exist");
+        assert!(
+            self.nullifiers.contains_key(&pub_inputs[3].to_string()),
+            "poll doesn't exist"
+        );
 
         assert!(
-            !self.nullifiers.get(&pub_inputs[3].to_string()).unwrap().contains(&pub_inputs[1].to_string()),
+            !self
+                .nullifiers
+                .get(&pub_inputs[3].to_string())
+                .unwrap()
+                .contains(&pub_inputs[1].to_string()),
             "used nullifier"
         );
 
@@ -228,13 +280,21 @@ impl Contract {
             "mismatched signal"
         );
 
-        self.nullifiers.entry(pub_inputs[3].to_string()).and_modify(|set| {set.insert(pub_inputs[1].to_string());});
+        self.nullifiers
+            .entry(pub_inputs[3].to_string())
+            .and_modify(|set| {
+                set.insert(pub_inputs[1].to_string());
+            });
 
         log!("Verified and emitting signal: {}", signal);
     }
 
     pub fn get_branch(&self, leaf_index: usize) -> MerklePath {
-        let merkle_proof = self.merkle_tree.tree.proof(leaf_index).expect("proof should exist");
+        let merkle_proof = self
+            .merkle_tree
+            .tree
+            .proof(leaf_index)
+            .expect("proof should exist");
 
         let mut tree_path_indices = vec![];
         let mut tree_siblings = vec![];
@@ -253,8 +313,8 @@ impl Contract {
         }
 
         MerklePath {
-            treePathIndices: tree_path_indices,
-            treeSiblings: tree_siblings,
+            tree_path_indices: tree_path_indices,
+            tree_siblings: tree_siblings,
         }
     }
 }
@@ -266,9 +326,10 @@ impl Contract {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use near_sdk::serde::{Deserialize, Serialize};
     use serde_json::from_reader;
     use std::fs::{read_to_string, File};
-    use std::io::BufReader;
+    use std::io::{BufReader, BufRead};
 
     #[test]
     fn insert_new_leaf() {
@@ -377,11 +438,37 @@ mod tests {
         let file = File::open("circuits/input.json").unwrap();
         let reader = BufReader::new(file);
 
+        #[derive(Debug, Serialize, Deserialize)]
+        struct Json {
+            treePathIndices: Vec<String>,
+            treeSiblings: Vec<String>,
+        }
+
         // Read the JSON contents of the file as an instance of `User`.
-        let input: MerklePath = from_reader(reader).unwrap();
+        let input: Json = from_reader(reader).unwrap();
 
         let merkle_path = contract.get_branch(0);
 
-        assert_eq!(input, merkle_path);
+        assert_eq!(input.treePathIndices, merkle_path.tree_path_indices);
+        assert_eq!(input.treeSiblings, merkle_path.tree_siblings);
+    }
+
+    #[test]
+    fn serialize_deserialize() {
+        let tree = MerkleTree::default();
+
+        let mut buf = File::create("tree.buf").unwrap();
+
+        tree.serialize(&mut buf).ok();
+
+        let file = File::open("tree.buf").unwrap();
+        let mut reader = BufReader::new(file);
+        let mut file_buf = reader.fill_buf().unwrap();
+        
+        let buf_tree = MerkleTree::deserialize(&mut file_buf).unwrap();
+
+        assert_eq!(tree.tree.depth, buf_tree.tree.depth);
+        assert_eq!(tree.tree.empty, buf_tree.tree.empty);
+        assert_eq!(tree.tree.nodes, buf_tree.tree.nodes);
     }
 }

@@ -32,17 +32,12 @@ test.afterEach(async (t) => {
   });
 });
 
-test('returns the default greeting', async (t) => {
+test('easy', async (t) => {
   const { contract } = t.context.accounts;
-  const message: string = await contract.view('get_greeting', {});
-  t.is(message, 'Hello');
-});
 
-test('changes the message', async (t) => {
-  const { root, contract } = t.context.accounts;
-  await root.call(contract, 'set_greeting', { message: 'Howdy' });
-  const message: string = await contract.view('get_greeting', {});
-  t.is(message, 'Howdy');
+  const res = await contract.view('get_next_leaf');
+
+  t.is(res, 0);
 });
 
 test('verify proof', async (t) => {
@@ -59,31 +54,8 @@ test('invalid proof', async (t) => {
   const { contract } = t.context.accounts;
 
   const proof_str: string = readFileSync('../contract/circuits/proof.json', 'utf-8');
-  const pub_input_str: string = '["0"]';
+  const pub_input_str: string = '["0","0","0","0"]';
   const res: boolean = await contract.view('verify_proof_on_chain', { proof: proof_str, inputs: pub_input_str });
 
   t.is(res, false);
-});
-
-test('verified set greeting ', async (t) => {
-  const { root, contract } = t.context.accounts;
-
-  const proof_str: string = readFileSync('../contract/circuits/proof.json', 'utf-8');
-  const pub_input_str: string = readFileSync('../contract/circuits/public.json', 'utf-8');
-
-  await root.call(contract, 'set_verified_greeting', { message: 'Howdy', proof: proof_str, inputs: pub_input_str }, { gas: "300000000000000" });
-  const message: string = await contract.view('get_greeting', {});
-
-  t.is(message, 'Howdy');
-});
-
-
-test('invalid set greeting ', async (t) => {
-  const { root, contract } = t.context.accounts;
-
-  const proof_str: string = readFileSync('../contract/circuits/proof.json', 'utf-8');
-  const pub_input_str: string = '["0"]';
-
-  await root.call(contract, 'set_verified_greeting', { message: 'Howdy', proof: proof_str, inputs: pub_input_str }, { gas: "300000000000000" })
-    .catch((error) => t.is(String(error).includes("invalid proof"), true));
 });

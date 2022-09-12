@@ -14,7 +14,7 @@ fn semaphore() -> Result<()> {
     
     // generate merkle tree
     let leaf = Field::from(0);
-    let mut tree = PoseidonTree::new(21, leaf);
+    let mut tree = PoseidonTree::new(4, leaf);
     tree.set(0, id.commitment());
     
     let merkle_proof = tree.proof(0).expect("proof should exist");

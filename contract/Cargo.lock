@@ -2648,7 +2648,7 @@ dependencies = [
 [[package]]
 name = "semaphore-custom"
 version = "0.1.0"
-source = "git+https://github.com/socathie/semaphore-rs#0d4c1cf22d5b1cff1537e4e800fe9d3743731ecb"
+source = "git+https://github.com/socathie/semaphore-rs#a89e3b8feb409ad7c5c13b086a07b80d1a63923f"
 dependencies = [
  "ark-bn254",
  "ark-ec",

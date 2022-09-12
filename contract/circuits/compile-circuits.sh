@@ -23,6 +23,6 @@ snarkjs groth16 setup build/circuit.r1cs powersOfTau28_hez_final_14.ptau build/c
 snarkjs zkey contribute build/circuit_0000.zkey build/circuit_final.zkey --name="1st Contributor Name" -v -e="random text"
 snarkjs zkey export verificationkey build/circuit_final.zkey build/verification_key.json
 
-# # Generate proof
+# Generate proof
 node build/circuit_js/generate_witness.js build/circuit_js/circuit.wasm input.json witness.wtns
 snarkjs groth16 prove build/circuit_final.zkey witness.wtns proof.json public.json
