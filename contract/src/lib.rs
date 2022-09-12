@@ -9,8 +9,15 @@
 use electron_rs::verifier::near::{
     get_prepared_verifying_key, parse_verification_key, verify_proof,
 };
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+// use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::collections::{LookupMap, LookupSet};
 use near_sdk::{log, near_bindgen};
+
+use semaphore::hash::Hash;
+use semaphore::{
+    hash_to_field, identity::Identity, merkle_tree::Branch, poseidon_tree::PoseidonTree,
+    protocol::*, Field,
+};
 
 // Define the default message
 const DEFAULT_MESSAGE: &str = "Hello";
@@ -127,11 +134,16 @@ const VKEY_STR: &str = r#"
 }
 "#;
 
+// TODO: clean up left over functions from hello-near
+
 // Define the contract structure
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize)]
+// #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
     message: String,
+    tree: PoseidonTree,
+    nullifiers: LookupMap<Field, LookupSet<Field>>, // external_nullifier: < nullifier_hash  >
+    next_leaf: usize,
 }
 
 // Define the default, which automatically initializes the contract
@@ -139,6 +151,9 @@ impl Default for Contract {
     fn default() -> Self {
         Self {
             message: DEFAULT_MESSAGE.to_string(),
+            tree: PoseidonTree::new(21, Field::from(0)),
+            nullifiers: LookupMap::new(b"m"),
+            next_leaf: 0,
         }
     }
 }
@@ -165,15 +180,23 @@ impl Contract {
         verify_proof(prepared_vkey, proof, inputs).unwrap()
     }
 
-    pub fn set_verified_greeting(
-        &mut self,
-        message: String,
-        proof: String,
-        inputs: String,
-    ) {
+    pub fn set_verified_greeting(&mut self, message: String, proof: String, inputs: String) {
         assert!(self.verify_proof_on_chain(proof, inputs), "invalid proof");
         log!("Verified and saving greeting {}", message);
         self.message = message;
+    }
+
+    pub fn insert_leaf(&mut self, commitment: Field) {
+        self.tree.set(self.next_leaf, commitment);
+        self.next_leaf += 1;
+    }
+
+    pub fn get_root(&self) -> String {
+        self.tree.root().to_string()
+    }
+
+    pub fn get_next_leaf(&self) -> usize {
+        self.next_leaf
     }
 }
 
@@ -184,78 +207,96 @@ impl Contract {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::read_to_string;
 
     #[test]
-    fn get_default_greeting() {
-        let contract = Contract::default();
-        // this test did not call set_greeting so should return the default "Hello" greeting
-        assert_eq!(contract.get_greeting(), "Hello".to_string());
-    }
-
-    #[test]
-    fn set_then_get_greeting() {
+    fn insert_new_leaf() {
         let mut contract = Contract::default();
-        contract.set_greeting("howdy".to_string());
+        let original_root = contract.get_root();
 
-        assert_eq!(contract.get_greeting(), "howdy".to_string());
+        let id = Identity::from_seed(b"secret");
+
+        contract.insert_leaf(id.commitment());
+
+        let new_root = contract.get_root();
+        let next_leaf = contract.get_next_leaf();
+
+        assert_ne!(original_root, new_root);
+        assert_eq!(next_leaf, 1);
     }
 
-    #[test]
+    // TODO: remove old tests
+    // use std::fs::read_to_string;
 
-    fn proof_verification() {
-        let proof_str = read_to_string("circuits/proof.json").unwrap();
+    // #[test]
+    // fn get_default_greeting() {
+    //     let contract = Contract::default();
+    //     // this test did not call set_greeting so should return the default "Hello" greeting
+    //     assert_eq!(contract.get_greeting(), "Hello".to_string());
+    // }
 
-        let pub_input_str = read_to_string("circuits/public.json").unwrap();
+    // #[test]
+    // fn set_then_get_greeting() {
+    //     let mut contract = Contract::default();
+    //     contract.set_greeting("howdy".to_string());
 
-        let contract = Contract::default();
-        let res = contract.verify_proof_on_chain(proof_str, pub_input_str);
+    //     assert_eq!(contract.get_greeting(), "howdy".to_string());
+    // }
 
-        assert!(res);
-    }
+    // #[test]
 
-    #[test]
-    fn invalid_verification() {
-        let proof_str = read_to_string("circuits/proof.json").unwrap();
+    // fn proof_verification() {
+    //     let proof_str = read_to_string("circuits/proof.json").unwrap();
 
-        let pub_input_str = r#"
-        [
-            "0","0","0","0"
-        ]
-        "#;
+    //     let pub_input_str = read_to_string("circuits/public.json").unwrap();
 
-        let contract = Contract::default();
-        let res = contract.verify_proof_on_chain(proof_str, pub_input_str.to_string());
+    //     let contract = Contract::default();
+    //     let res = contract.verify_proof_on_chain(proof_str, pub_input_str);
 
-        assert!(!res);
-    }
+    //     assert!(res);
+    // }
 
-    #[test]
-    fn verified_set_then_get_greeting() {
-        let proof_str = read_to_string("circuits/proof.json").unwrap();
+    // #[test]
+    // fn invalid_verification() {
+    //     let proof_str = read_to_string("circuits/proof.json").unwrap();
 
-        let pub_input_str = read_to_string("circuits/public.json").unwrap();
+    //     let pub_input_str = r#"
+    //     [
+    //         "0","0","0","0"
+    //     ]
+    //     "#;
 
-        let mut contract = Contract::default();
-        contract.set_verified_greeting("howdy".to_string(), proof_str, pub_input_str);
+    //     let contract = Contract::default();
+    //     let res = contract.verify_proof_on_chain(proof_str, pub_input_str.to_string());
 
-        assert_eq!(contract.get_greeting(), "howdy".to_string());
-    }
+    //     assert!(!res);
+    // }
 
-    #[test]
-    #[should_panic(expected = "invalid proof")]
-    fn invalid_set_then_get_greeting() {
-        let proof_str = read_to_string("circuits/proof.json").unwrap();
-        
-        let pub_input_str = r#"
-        [
-            "0","0","0","0"
-        ]
-        "#;
+    // #[test]
+    // fn verified_set_then_get_greeting() {
+    //     let proof_str = read_to_string("circuits/proof.json").unwrap();
 
-        let mut contract = Contract::default();
-        contract.set_verified_greeting("howdy".to_string(), proof_str, pub_input_str.to_string());
+    //     let pub_input_str = read_to_string("circuits/public.json").unwrap();
 
-        assert_eq!(contract.get_greeting(), "hello".to_string());
-    }
+    //     let mut contract = Contract::default();
+    //     contract.set_verified_greeting("howdy".to_string(), proof_str, pub_input_str);
+
+    //     assert_eq!(contract.get_greeting(), "howdy".to_string());
+    // }
+
+    // #[test]
+    // #[should_panic(expected = "invalid proof")]
+    // fn invalid_set_then_get_greeting() {
+    //     let proof_str = read_to_string("circuits/proof.json").unwrap();
+
+    //     let pub_input_str = r#"
+    //     [
+    //         "0","0","0","0"
+    //     ]
+    //     "#;
+
+    //     let mut contract = Contract::default();
+    //     contract.set_verified_greeting("howdy".to_string(), proof_str, pub_input_str.to_string());
+
+    //     assert_eq!(contract.get_greeting(), "hello".to_string());
+    // }
 }
