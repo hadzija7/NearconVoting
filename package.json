@@ -14,7 +14,7 @@
     "deps-install": "npm install && cd frontend && npm install && cd ../integration-tests && npm install && cd .."
   },
   "devDependencies": {
+    "circomlib": "^2.0.5",
     "near-cli": "^3.3.0"
-  },
-  "dependencies": {}
+  }
 }

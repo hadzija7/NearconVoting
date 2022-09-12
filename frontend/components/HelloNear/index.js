@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { getGreetingFromContract, setGreetingOnContract, verifiedGreetingOnContract } from '../../utils/HelloNear';
 import { EducationalText, SignInPrompt, SignOutButton } from './ui-components';
-import { generateCalldata } from '../../circuits/circuit/generate-proof';
+import { generateCalldata } from '../../circuit/generate-proof';
 
 //css
 import '../../assets/global.css';

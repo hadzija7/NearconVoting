@@ -4,6 +4,8 @@ import { generateProof, verifyProof } from "@semaphore-protocol/proof"
 
 import { useEffect } from "react";
 
+import verificationKey from "../../circuit/verification_key.json";
+
 const Poll = () => {
     const votingProcess = async () => {
         //generate identity and identity commitment
@@ -24,12 +26,10 @@ const Poll = () => {
         const signal = "Hello world"
 
         const fullProof = await generateProof(identity, group, externalNullifier, signal, {
-            zkeyFilePath: "../../circuits/semaphore/semaphore_final.zkey",
-            wasmFilePath: "../../circuits/semaphore/semaphore.wasm"
+            zkeyFilePath: "./circuit_final.zkey",
+            wasmFilePath: "./circuit.wasm"
         })
         console.log("Full proof: ", fullProof)
-
-        const verificationKey = JSON.parse(fs.readFileSync("../../circuits/semaphore/verification_key.json", "utf-8"))
 
         await verifyProof(verificationKey, fullProof)
 
