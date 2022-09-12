@@ -9,14 +9,13 @@
 use electron_rs::verifier::near::{
     get_prepared_verifying_key, parse_verification_key, verify_proof,
 };
-// use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 // use near_sdk::collections::{LookupMap, LookupSet};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{log, near_bindgen};
 
-use semaphore::{
-    hash_to_field, identity::Identity, merkle_tree::Branch, poseidon_tree::PoseidonTree,
-    protocol::Proof, Field,
+use semaphore_custom::{
+    hash_to_field, identity::Identity, merkle_tree:: Branch, poseidon_tree::PoseidonTree, Field,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -134,10 +133,24 @@ const VKEY_STR: &str = r#"
 
 // Define the contract structure
 #[near_bindgen]
+#[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
-    tree: PoseidonTree,
-    nullifiers: HashMap<Field, HashSet<Field>>, // external_nullifier: < nullifier_hash  >
+    #[borsh_skip]
+    merkle_tree: MerkleTree,
+    nullifiers: HashMap<String, HashSet<String>>, // external_nullifier: < nullifier_hash  >
     next_leaf: usize,
+}
+
+pub struct MerkleTree {
+    tree: PoseidonTree,
+}
+
+impl Default for MerkleTree {
+    fn default() -> Self {
+        Self {
+            tree: PoseidonTree::new(21, Field::from(0))
+        }
+    }
 }
 
 #[derive(PartialEq, Debug, Serialize, Deserialize)]
@@ -150,7 +163,7 @@ pub struct MerklePath {
 impl Default for Contract {
     fn default() -> Self {
         Self {
-            tree: PoseidonTree::new(21, Field::from(0)),
+            merkle_tree: MerkleTree::default(),
             nullifiers: HashMap::new(),
             next_leaf: 0,
         }
@@ -167,27 +180,27 @@ impl Contract {
         verify_proof(prepared_vkey, proof, inputs).unwrap()
     }
 
-    pub fn insert_leaf(&mut self, commitment: Field) {
-        self.tree.set(self.next_leaf, commitment);
+    pub fn insert_leaf(&mut self, commitment: String) {
+        self.merkle_tree.tree.set(self.next_leaf, commitment.parse::<Field>().unwrap());
         self.next_leaf += 1;
     }
 
     pub fn get_root(&self) -> String {
-        self.tree.root().to_string()
+        self.merkle_tree.tree.root().to_string()
     }
 
     pub fn get_next_leaf(&self) -> usize {
         self.next_leaf
     }
 
-    pub fn add_poll(&mut self, poll_id_str: String) { // TODO: add Poll struct
-        let poll_id = poll_id_str.parse::<Field>().unwrap();
+    pub fn add_poll(&mut self, poll_id: String) { // TODO: add Poll struct
+        // let poll_id = poll_id_str.parse::<Field>().unwrap();
 
         assert!(!self.nullifiers.contains_key(&poll_id), "poll already exists");
 
-        self.nullifiers.insert(poll_id, HashSet::new());
+        log!("Poll created: {}", &poll_id);
 
-        log!("Poll created: {}", poll_id_str);
+        self.nullifiers.insert(poll_id, HashSet::new());
     }
 
     pub fn vote(&mut self, signal: String, proof: String, inputs: String) {
@@ -201,27 +214,27 @@ impl Contract {
             .filter_map(|w| w.parse::<Field>().ok()) // calling ok() turns Result to Option so that filter_map can discard None values
             .collect();
 
-        assert!(self.nullifiers.contains_key(&pub_inputs[3]), "poll doesn't exist");
+        assert!(self.nullifiers.contains_key(&pub_inputs[3].to_string()), "poll doesn't exist");
 
         assert!(
-            !self.nullifiers.get(&pub_inputs[3]).unwrap().contains(&pub_inputs[1]),
+            !self.nullifiers.get(&pub_inputs[3].to_string()).unwrap().contains(&pub_inputs[1].to_string()),
             "used nullifier"
         );
 
-        assert!(pub_inputs[0] == self.tree.root(), "wrong root");
+        assert!(pub_inputs[0] == self.merkle_tree.tree.root(), "wrong root");
 
         assert!(
             pub_inputs[2] == hash_to_field(signal.as_bytes()),
             "mismatched signal"
         );
 
-        self.nullifiers.entry(pub_inputs[3]).and_modify(|set| {set.insert(pub_inputs[1]);});
+        self.nullifiers.entry(pub_inputs[3].to_string()).and_modify(|set| {set.insert(pub_inputs[1].to_string());});
 
         log!("Verified and emitting signal: {}", signal);
     }
 
     pub fn get_branch(&self, leaf_index: usize) -> MerklePath {
-        let merkle_proof = self.tree.proof(leaf_index).expect("proof should exist");
+        let merkle_proof = self.merkle_tree.tree.proof(leaf_index).expect("proof should exist");
 
         let mut tree_path_indices = vec![];
         let mut tree_siblings = vec![];
@@ -264,7 +277,7 @@ mod tests {
 
         let id = Identity::from_seed(b"secret");
 
-        contract.insert_leaf(id.commitment());
+        contract.insert_leaf(id.commitment().to_string());
 
         let new_root = contract.get_root();
         let next_leaf = contract.get_next_leaf();
@@ -303,7 +316,7 @@ mod tests {
 
         let id = Identity::from_seed(b"secret");
 
-        contract.insert_leaf(id.commitment());
+        contract.insert_leaf(id.commitment().to_string());
 
         let proof_str = read_to_string("circuits/proof.json").unwrap();
 
@@ -323,7 +336,7 @@ mod tests {
 
         let id = Identity::from_seed(b"secret");
 
-        contract.insert_leaf(id.commitment());
+        contract.insert_leaf(id.commitment().to_string());
 
         let proof_str = read_to_string("circuits/proof.json").unwrap();
 
@@ -340,7 +353,7 @@ mod tests {
 
         let id = Identity::from_seed(b"secret");
 
-        contract.insert_leaf(id.commitment());
+        contract.insert_leaf(id.commitment().to_string());
 
         let proof_str = read_to_string("circuits/proof.json").unwrap();
 
@@ -359,7 +372,7 @@ mod tests {
 
         let id = Identity::from_seed(b"secret");
 
-        contract.insert_leaf(id.commitment());
+        contract.insert_leaf(id.commitment().to_string());
         // Open the file in read-only mode with buffer.
         let file = File::open("circuits/input.json").unwrap();
         let reader = BufReader::new(file);

@@ -31,7 +31,6 @@ yarn-debug.log*
 yarn-error.log*
 
 *.ptau
-contract/neardev
 contract/target
 frontend/.parcel-cache
 frontend/dist/*.html
