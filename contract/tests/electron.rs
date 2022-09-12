@@ -31,7 +31,7 @@ fn invalid_verification_electron() -> Result<()> {
 
     let pub_input_str = r#"
     [
-        "0"
+        "0","0","0","0"
     ]
     "#;
 

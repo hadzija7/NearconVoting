@@ -24,5 +24,5 @@ snarkjs zkey contribute build/circuit_0000.zkey build/circuit_final.zkey --name=
 snarkjs zkey export verificationkey build/circuit_final.zkey build/verification_key.json
 
 # # Generate proof
-# node build/circuit_js/generate_witness.js build/circuit_js/circuit.wasm input.json witness.wtns
-# snarkjs groth16 prove build/circuit_final.zkey witness.wtns proof.json public.json
+node build/circuit_js/generate_witness.js build/circuit_js/circuit.wasm input.json witness.wtns
+snarkjs groth16 prove build/circuit_final.zkey witness.wtns proof.json public.json

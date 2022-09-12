@@ -15,7 +15,7 @@ use near_sdk::{log, near_bindgen};
 // Define the default message
 const DEFAULT_MESSAGE: &str = "Hello";
 
-const VKEY_STR: &str = r#"const VKEY_STR: &str = r#"
+const VKEY_STR: &str = r#"
 {
  "protocol": "groth16",
  "curve": "bn128",
@@ -220,7 +220,7 @@ mod tests {
 
         let pub_input_str = r#"
         [
-            "0"
+            "0","0","0","0"
         ]
         "#;
 
@@ -249,7 +249,7 @@ mod tests {
         
         let pub_input_str = r#"
         [
-            "0"
+            "0","0","0","0"
         ]
         "#;
 

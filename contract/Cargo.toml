@@ -12,9 +12,13 @@ near-sdk = "4.0.0"
 uint = { version = "0.9.3", default-features = false }
 near-contract-standards = "*"
 electron-rs = { git = "https://github.com/Electron-Labs/electron-rs.git" } 
+semaphore = { git = "https://github.com/worldcoin/semaphore-rs" }
+num-bigint = "*"
 
 [dev-dependencies]
 color-eyre = "0.5"
+serde_json = "*"
+
 
 [profile.release]
 codegen-units = 1
