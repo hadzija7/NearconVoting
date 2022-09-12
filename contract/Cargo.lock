@@ -1368,6 +1368,7 @@ dependencies = [
  "near-sdk",
  "num-bigint 0.3.3",
  "semaphore",
+ "serde",
  "serde_json",
  "uint",
 ]

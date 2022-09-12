@@ -1,11 +1,12 @@
 use semaphore::{hash_to_field, Field, identity::Identity, poseidon_tree::PoseidonTree,
     protocol::* , merkle_tree::Branch};
-use num_bigint::BigInt;
+
 use color_eyre::Result;
 
 use serde_json::{json, to_writer};
 use std::fs::File;
 
+#[ignore]
 #[test]
 fn semaphore() -> Result<()> {
     // generate identity
@@ -32,22 +33,22 @@ fn semaphore() -> Result<()> {
         match elem {
             Branch::Left(c) => {
                 tree_path_indices.push("0".to_string());
-                tree_siblings.push(c.clone());
+                tree_siblings.push(c.to_string());
             },
             Branch::Right(c) => {
                 tree_path_indices.push("1".to_string());
-                tree_siblings.push(c.clone());
+                tree_siblings.push(c.to_string());
             },
         }
     }
     
     let input = json!({    
-        "identityNullifier": id.nullifier,
-        "identityTrapdoor": id.trapdoor,
+        "identityNullifier": id.nullifier.to_string(),
+        "identityTrapdoor": id.trapdoor.to_string(),
         "treePathIndices": tree_path_indices,
         "treeSiblings": tree_siblings,
-        "signalHash": signal_hash,
-        "externalNullifier": external_nullifier_hash
+        "signalHash": signal_hash.to_string(),
+        "externalNullifier": external_nullifier_hash.to_string(),
     });
 
     // println!("{}", input);
@@ -55,7 +56,7 @@ fn semaphore() -> Result<()> {
     to_writer(&File::create("circuits/input.json")?, &input)?;
 
 
-    println!("root: {}", root);
+    // println!("root: {}", root);
     
     let proof = generate_proof(&id, &merkle_proof, external_nullifier_hash, signal_hash).unwrap();
     let success = verify_proof(root, nullifier_hash, signal_hash, external_nullifier_hash, &proof).unwrap();

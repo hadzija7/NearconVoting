@@ -10,7 +10,7 @@ fn proof_verification_electron() -> Result<()> {
 
     let pub_input_str = read_to_string("circuits/public.json").unwrap();
 
-    println!("{}", pub_input_str);
+    // println!("{}", pub_input_str);
 
     let vkey = parse_verification_key(vkey_str).unwrap();
     let prepared_vkey = get_prepared_verifying_key(vkey);

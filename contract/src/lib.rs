@@ -10,17 +10,15 @@ use electron_rs::verifier::near::{
     get_prepared_verifying_key, parse_verification_key, verify_proof,
 };
 // use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LookupMap, LookupSet};
+// use near_sdk::collections::{LookupMap, LookupSet};
+use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{log, near_bindgen};
 
-use semaphore::hash::Hash;
 use semaphore::{
     hash_to_field, identity::Identity, merkle_tree::Branch, poseidon_tree::PoseidonTree,
-    protocol::*, Field,
+    protocol::Proof, Field,
 };
-
-// Define the default message
-const DEFAULT_MESSAGE: &str = "Hello";
+use std::collections::{HashMap, HashSet};
 
 const VKEY_STR: &str = r#"
 {
@@ -134,25 +132,26 @@ const VKEY_STR: &str = r#"
 }
 "#;
 
-// TODO: clean up left over functions from hello-near
-
 // Define the contract structure
 #[near_bindgen]
-// #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
-    message: String,
     tree: PoseidonTree,
-    nullifiers: LookupMap<Field, LookupSet<Field>>, // external_nullifier: < nullifier_hash  >
+    nullifiers: HashMap<Field, HashSet<Field>>, // external_nullifier: < nullifier_hash  >
     next_leaf: usize,
+}
+
+#[derive(PartialEq, Debug, Serialize, Deserialize)]
+pub struct MerklePath {
+    treePathIndices: Vec<String>,
+    treeSiblings: Vec<String>,
 }
 
 // Define the default, which automatically initializes the contract
 impl Default for Contract {
     fn default() -> Self {
         Self {
-            message: DEFAULT_MESSAGE.to_string(),
             tree: PoseidonTree::new(21, Field::from(0)),
-            nullifiers: LookupMap::new(b"m"),
+            nullifiers: HashMap::new(),
             next_leaf: 0,
         }
     }
@@ -161,29 +160,11 @@ impl Default for Contract {
 // Implement the contract structure
 #[near_bindgen]
 impl Contract {
-    // Public method - returns the greeting saved, defaulting to DEFAULT_MESSAGE
-    pub fn get_greeting(&self) -> String {
-        return self.message.clone();
-    }
-
-    // Public method - accepts a greeting, such as "howdy", and records it
-    pub fn set_greeting(&mut self, message: String) {
-        // Use env::log to record logs permanently to the blockchain!
-        log!("Saving greeting {}", message);
-        self.message = message;
-    }
-
     pub fn verify_proof_on_chain(&self, proof: String, inputs: String) -> bool {
         let vkey = parse_verification_key(VKEY_STR.to_string()).unwrap();
         let prepared_vkey = get_prepared_verifying_key(vkey);
 
         verify_proof(prepared_vkey, proof, inputs).unwrap()
-    }
-
-    pub fn set_verified_greeting(&mut self, message: String, proof: String, inputs: String) {
-        assert!(self.verify_proof_on_chain(proof, inputs), "invalid proof");
-        log!("Verified and saving greeting {}", message);
-        self.message = message;
     }
 
     pub fn insert_leaf(&mut self, commitment: Field) {
@@ -198,6 +179,71 @@ impl Contract {
     pub fn get_next_leaf(&self) -> usize {
         self.next_leaf
     }
+
+    pub fn add_poll(&mut self, poll_id_str: String) { // TODO: add Poll struct
+        let poll_id = poll_id_str.parse::<Field>().unwrap();
+
+        assert!(!self.nullifiers.contains_key(&poll_id), "poll already exists");
+
+        self.nullifiers.insert(poll_id, HashSet::new());
+
+        log!("Poll created: {}", poll_id_str);
+    }
+
+    pub fn vote(&mut self, signal: String, proof: String, inputs: String) {
+        assert!(
+            self.verify_proof_on_chain(proof, inputs.clone()),
+            "invalid proof"
+        );
+
+        let pub_inputs: Vec<Field> = inputs
+            .split("\"") // split string into words by whitespace
+            .filter_map(|w| w.parse::<Field>().ok()) // calling ok() turns Result to Option so that filter_map can discard None values
+            .collect();
+
+        assert!(self.nullifiers.contains_key(&pub_inputs[3]), "poll doesn't exist");
+
+        assert!(
+            !self.nullifiers.get(&pub_inputs[3]).unwrap().contains(&pub_inputs[1]),
+            "used nullifier"
+        );
+
+        assert!(pub_inputs[0] == self.tree.root(), "wrong root");
+
+        assert!(
+            pub_inputs[2] == hash_to_field(signal.as_bytes()),
+            "mismatched signal"
+        );
+
+        self.nullifiers.entry(pub_inputs[3]).and_modify(|set| {set.insert(pub_inputs[1]);});
+
+        log!("Verified and emitting signal: {}", signal);
+    }
+
+    pub fn get_branch(&self, leaf_index: usize) -> MerklePath {
+        let merkle_proof = self.tree.proof(leaf_index).expect("proof should exist");
+
+        let mut tree_path_indices = vec![];
+        let mut tree_siblings = vec![];
+
+        for elem in merkle_proof.0.iter() {
+            match elem {
+                Branch::Left(c) => {
+                    tree_path_indices.push("0".to_string());
+                    tree_siblings.push(c.to_string());
+                }
+                Branch::Right(c) => {
+                    tree_path_indices.push("1".to_string());
+                    tree_siblings.push(c.to_string());
+                }
+            }
+        }
+
+        MerklePath {
+            treePathIndices: tree_path_indices,
+            treeSiblings: tree_siblings,
+        }
+    }
 }
 
 /*
@@ -207,6 +253,9 @@ impl Contract {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::from_reader;
+    use std::fs::{read_to_string, File};
+    use std::io::BufReader;
 
     #[test]
     fn insert_new_leaf() {
@@ -224,79 +273,102 @@ mod tests {
         assert_eq!(next_leaf, 1);
     }
 
-    // TODO: remove old tests
-    // use std::fs::read_to_string;
+    #[test]
+    fn add_poll() {
+        let mut contract = Contract::default();
 
-    // #[test]
-    // fn get_default_greeting() {
-    //     let contract = Contract::default();
-    //     // this test did not call set_greeting so should return the default "Hello" greeting
-    //     assert_eq!(contract.get_greeting(), "Hello".to_string());
-    // }
+        let external_nullifier_hash = hash_to_field(b"appId");
 
-    // #[test]
-    // fn set_then_get_greeting() {
-    //     let mut contract = Contract::default();
-    //     contract.set_greeting("howdy".to_string());
+        contract.add_poll(external_nullifier_hash.to_string());
+    }
 
-    //     assert_eq!(contract.get_greeting(), "howdy".to_string());
-    // }
+    #[test]
+    #[should_panic(expected = "poll already exists")]
+    fn cannot_add_poll_twice() {
+        let mut contract = Contract::default();
 
-    // #[test]
+        let external_nullifier_hash = hash_to_field(b"appId");
 
-    // fn proof_verification() {
-    //     let proof_str = read_to_string("circuits/proof.json").unwrap();
+        contract.add_poll(external_nullifier_hash.to_string());
+        contract.add_poll(external_nullifier_hash.to_string());
+    }
 
-    //     let pub_input_str = read_to_string("circuits/public.json").unwrap();
+    #[test]
+    fn insert_new_leaf_and_vote() {
+        let mut contract = Contract::default();
 
-    //     let contract = Contract::default();
-    //     let res = contract.verify_proof_on_chain(proof_str, pub_input_str);
+        let external_nullifier_hash = hash_to_field(b"appId");
 
-    //     assert!(res);
-    // }
+        contract.add_poll(external_nullifier_hash.to_string());
 
-    // #[test]
-    // fn invalid_verification() {
-    //     let proof_str = read_to_string("circuits/proof.json").unwrap();
+        let id = Identity::from_seed(b"secret");
 
-    //     let pub_input_str = r#"
-    //     [
-    //         "0","0","0","0"
-    //     ]
-    //     "#;
+        contract.insert_leaf(id.commitment());
 
-    //     let contract = Contract::default();
-    //     let res = contract.verify_proof_on_chain(proof_str, pub_input_str.to_string());
+        let proof_str = read_to_string("circuits/proof.json").unwrap();
 
-    //     assert!(!res);
-    // }
+        let pub_input_str = read_to_string("circuits/public.json").unwrap();
 
-    // #[test]
-    // fn verified_set_then_get_greeting() {
-    //     let proof_str = read_to_string("circuits/proof.json").unwrap();
+        contract.vote("xxx".to_string(), proof_str, pub_input_str);
+    }
 
-    //     let pub_input_str = read_to_string("circuits/public.json").unwrap();
+    #[test]
+    #[should_panic(expected = "used nullifier")]
+    fn insert_new_leaf_and_vote_twice() {
+        let mut contract = Contract::default();
 
-    //     let mut contract = Contract::default();
-    //     contract.set_verified_greeting("howdy".to_string(), proof_str, pub_input_str);
+        let external_nullifier_hash = hash_to_field(b"appId");
 
-    //     assert_eq!(contract.get_greeting(), "howdy".to_string());
-    // }
+        contract.add_poll(external_nullifier_hash.to_string());
 
-    // #[test]
-    // #[should_panic(expected = "invalid proof")]
-    // fn invalid_set_then_get_greeting() {
-    //     let proof_str = read_to_string("circuits/proof.json").unwrap();
+        let id = Identity::from_seed(b"secret");
 
-    //     let pub_input_str = r#"
-    //     [
-    //         "0","0","0","0"
-    //     ]
-    //     "#;
+        contract.insert_leaf(id.commitment());
 
-    //     let mut contract = Contract::default();
-    //     contract.set_verified_greeting("howdy".to_string(), proof_str, pub_input_str.to_string());
+        let proof_str = read_to_string("circuits/proof.json").unwrap();
 
-    //     assert_eq!(contract.get_greeting(), "hello".to_string());
-    // }
+        let pub_input_str = read_to_string("circuits/public.json").unwrap();
+
+        contract.vote("xxx".to_string(), proof_str.clone(), pub_input_str.clone());
+        contract.vote("xxx".to_string(), proof_str, pub_input_str);
+    }
+
+    #[test]
+    #[should_panic(expected = "invalid proof")]
+    fn insert_new_leaf_and_invalid_proof() {
+        let mut contract = Contract::default();
+
+        let id = Identity::from_seed(b"secret");
+
+        contract.insert_leaf(id.commitment());
+
+        let proof_str = read_to_string("circuits/proof.json").unwrap();
+
+        let pub_input_str = r#"
+        [
+            "0","0","0","0"
+        ]
+        "#;
+
+        contract.vote("xxx".to_string(), proof_str, pub_input_str.to_string());
+    }
+
+    #[test]
+    fn insert_new_leaf_and_get_branch() {
+        let mut contract = Contract::default();
+
+        let id = Identity::from_seed(b"secret");
+
+        contract.insert_leaf(id.commitment());
+        // Open the file in read-only mode with buffer.
+        let file = File::open("circuits/input.json").unwrap();
+        let reader = BufReader::new(file);
+
+        // Read the JSON contents of the file as an instance of `User`.
+        let input: MerklePath = from_reader(reader).unwrap();
+
+        let merkle_path = contract.get_branch(0);
+
+        assert_eq!(input, merkle_path);
+    }
 }
