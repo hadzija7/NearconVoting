@@ -5,3 +5,5 @@ const Polls = () => {
         </div>
     )
 }
+
+export default Polls;
