@@ -32,7 +32,7 @@ export default function App() {
     if(registered){
       result = <label>Registered</label>
     }else{
-      result = <button onClick={registerIdentity}>Register</button>
+      result = <button onClick={registerIdentity}>Register identity</button>
     }
     return result
   }
@@ -40,12 +40,16 @@ export default function App() {
   return (
     <Router>
         <div>
-            <h2>Voting app</h2>
             <nav className="navbar navbar-expand-lg navbar-light bg-light">
-              <div className="navbar-nav mr-auto">
-                <div><Link to={'/'} className="nav-link"> Home </Link></div>
-                <div><Link to={'/polls'} className="nav-link">Polls</Link></div>
-                <div>{renderRegisterButton()}</div>
+              <div style={{display:"flex", justifyContent:"space-between"}}>
+                <div>
+                  Nearcon Voting
+                </div>
+                <div style={{display:"flex"}}>
+                  <div style={{marginRight:"10px"}}><Link to={'/'} className="nav-link"> Home </Link></div>
+                  <div style={{marginRight:"10px"}}><Link to={'/polls'} className="nav-link">Polls</Link></div>
+                  <div>{renderRegisterButton()}</div>
+                </div>
               </div>
             </nav>
             <hr />
