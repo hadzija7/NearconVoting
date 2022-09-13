@@ -2,12 +2,17 @@ import { Identity } from "@semaphore-protocol/identity"
 import { Group } from "@semaphore-protocol/group"
 import { generateProof, verifyProof } from "@semaphore-protocol/proof"
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import verificationKey from "../../circuit/verification_key.json";
 
 const Poll = () => {
-    const votingProcess = async () => {
+
+    // const [proposals, setProposals] = (['option1', 'option2', 'option3'])
+    let proposals = ['option1', 'option2', 'option3']
+
+    const votingProcess = async (event) => {
+        event.preventDefault()
         //generate identity and identity commitment
         const identity = new Identity()
         const trapdoor = identity.getTrapdoor()
@@ -37,12 +42,27 @@ const Poll = () => {
     }
 
     useEffect(() => {
-        votingProcess()
     }, []);
 
     return (
-        <div>
-            This is a poll
+        <div style={{display:"flex", flexDirection:"column", justifyContent:"center", margin:"auto 0"}}>
+            <div>
+                <h1>Poll example</h1>
+            </div>
+            <div style={{alignSelf:"center"}}>
+                Vote for one of the 3 options
+            </div>
+            <form onSubmit={votingProcess} style={{alignSelf:"center"}}>
+                <div>
+                    {proposals.map( (proposal) => (
+                        <div key={proposal}>
+                            <input value={proposal} type="radio" name="vote" />
+                            proposal
+                        </div>
+                    ))}
+                </div>
+                <button style={{marginTop:"20px"}}>Vote</button>
+            </form>
         </div>
     )
 }
