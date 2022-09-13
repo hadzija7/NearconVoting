@@ -11,16 +11,17 @@ crate-type = ["cdylib", "rlib"]
 near-sdk = "4.0.0"
 uint = { version = "0.9.3", default-features = false }
 near-contract-standards = "*"
-semaphore-custom = { git = "https://github.com/socathie/semaphore-rs" }
+#semaphore-custom = { git = "https://github.com/socathie/semaphore-rs" }
 electron-rs = { git = "https://github.com/Electron-Labs/electron-rs.git" }
 getrandom = { version = "0.2", features = ["js"] }
 serde = "*"
+#semaphore = { git = "https://github.com/worldcoin/semaphore-rs" }
+ruint = { version = "1.2.0", features = [ "serde", "num-bigint", "ark-ff" ] }
 
 [dev-dependencies]
 color-eyre = "0.5"
 serde_json = "*"
 num-bigint = "*"
-semaphore = { git = "https://github.com/worldcoin/semaphore-rs" }
 
 
 [profile.release]
