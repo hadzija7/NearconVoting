@@ -42,7 +42,15 @@ const Poll = () => {
 
     return (
         <div>
-            This is a poll
+            <div>
+                <h1>Poll example</h1>
+            </div>
+            <div>
+                Vote for one of the 3 options
+            </div>
+            <form>
+                
+            </form>
         </div>
     )
 }
